@@ -7,8 +7,8 @@
 // turns with the orbit. All motion is SMIL. No script runs in the scene.
 //
 // Rules measured in the desktop app (any of these freezes the whole scene):
-// no viewport media query, no CSS mask-image, no vector-effect. The build
-// refuses them. The source must stay under 131,072 characters.
+// no viewport media query, no CSS mask-image, no vector-effect, and (from
+// v1.1.0) no shape-rendering or negative scale animation. The build refuses them. The source must stay under 131,072 characters.
 //
 // Run: node tools/build-scene.mjs [preview-dir]
 
@@ -833,7 +833,7 @@ function pixelPaths(rows, top = 0) {
       if (ch === '.') { c++; continue; }
       let e = c;
       while (e < row.length && row[e] === ch) e++;
-      runs[ch] = (runs[ch] ?? '') + `M${c} ${r + top}h${e - c}v1h${c - e}z`;
+      runs[ch] = (runs[ch] ?? '') + `M${c} ${r + top}h${e - c}v1.06h${c - e}z`;
       c = e;
     }
   });
@@ -845,7 +845,12 @@ function astronautMarkup() {
   const W = ASTRONAUT[0].length, H = ASTRONAUT.length + 2;
   const legs = ASTRONAUT_LEGS.map((frame, i) =>
     `<g visibility="${i ? 'hidden' : 'visible'}">${discrete('visibility', i ? ['hidden', 'visible'] : ['visible', 'hidden'], [0, 0.5], 0.9)}${pixelPaths(frame, ASTRONAUT.length)}</g>`).join('');
-  const sprite = `<g transform="translate(${num(-W * P / 2)} ${num(-H * P / 2)}) scale(${P})" shape-rendering="crispEdges">${pixelPaths(ASTRONAUT)}${legs}</g>`;
+  const body = `${pixelPaths(ASTRONAUT)}${legs}`;
+  const place = `translate(${num(-W * P / 2)} ${num(-H * P / 2)}) scale(${P})`;
+  // Facing right, and a mirrored copy facing left for the return pass; a
+  // discrete visibility switch picks one (no scale animation, no
+  // shape-rendering: the app froze the scene with them).
+  const facing = (flip) => `<g transform="${flip ? `scale(-1 1) ` : ''}${place}">${body}</g>`;
   // Two passes per cycle, as fractions of T: [start, end] and their paths.
   const A = [0.05, 0.22], B = [0.55, 0.72];
   const pathA = [[-120, 640], [480, 430], [1020, 320], [1720, 170]];
@@ -862,8 +867,9 @@ function astronautMarkup() {
     `<g transform="translate(${pathA[0][0]} ${pathA[0][1]})"><animateTransform attributeName="transform" type="translate" values="${vals.join(';')}" keyTimes="${keys.map(k).join(';')}" calcMode="spline" keySplines="${keys.slice(1).map(() => '.4 0 .6 1').join(';')}" dur="${sec(T)}" repeatCount="indefinite"/>` +
     `<g><animateTransform attributeName="transform" type="translate" values="0 0;0 -9;0 0" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="4.6s" repeatCount="indefinite"/>` +
     `<g><animateTransform attributeName="transform" type="rotate" values="-9;7;-9" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="7.4s" repeatCount="indefinite"/>` +
-    `<g><animateTransform attributeName="transform" type="scale" values="1 1;-1 1;1 1" keyTimes="0;${k((A[1] + B[0]) / 2)};${k((B[1] + 1) / 2)}" calcMode="discrete" dur="${sec(T)}" repeatCount="indefinite"/>` +
-    `${sprite}</g></g></g></g></g>`;
+    `<g visibility="visible">${discrete('visibility', ['visible', 'hidden', 'visible'], [0, (A[1] + B[0]) / 2, (B[1] + 1) / 2], T)}${facing(false)}</g>` +
+    `<g visibility="hidden">${discrete('visibility', ['hidden', 'visible', 'hidden'], [0, (A[1] + B[0]) / 2, (B[1] + 1) / 2], T)}${facing(true)}</g>` +
+    `</g></g></g></g>`;
 }
 
 // ---------------------------------------------------------------- shooting stars
@@ -920,7 +926,7 @@ const fillCss = [...classes].map(([fill, cls]) => `.${cls}{fill:${fill}}`).join(
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEW.w} ${VIEW.h}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>svg{background:#000}text{font-family:Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace;font-size:${FONT}px;white-space:pre;dominant-baseline:central}${fillCss}.ORB{fill:none;stroke:#fff;stroke-opacity:.17;stroke-width:1.3;stroke-linecap:round;stroke-dasharray:0 7}.BELT path{stroke:#bfb6a6;stroke-opacity:.45;stroke-width:2.4;stroke-linecap:round}.TW{font-size:10px;fill:#ccd6ff}.MD{font-size:9px;text-anchor:middle;dominant-baseline:central}.CT{font-size:6.5px}.CH{font-size:10px;text-anchor:middle;dominant-baseline:central}${css.join('')}</style><defs>${shades.join('')}</defs><rect x="-1200" y="-1600" width="4000" height="4000" fill="#000"/>${starField()}${twinkles()}${meteors}<g><g transform="translate(${CENTRE.x} ${CENTRE.y})"><rect x="-1000" y="-700" width="2000" height="1400" fill="none"/><g class="ORB">${orbitMarkup}</g>${beltMarkup()}${sun.corona}<g transform="scale(1 ${K})">${back.join('')}</g>${sun.disc}<g transform="scale(1 ${K})">${front.join('')}</g>${comet}</g></g>${astronaut}</svg>`;
 
-for (const bad of [/href=/, /<use\b/, /<a[\s>]/, /\sstyle=/, /@media\s*\((?!prefers-)/, /mask-image/, /vector-effect/]) {
+for (const bad of [/href=/, /<use\b/, /<a[\s>]/, /\sstyle=/, /@media\s*\((?!prefers-)/, /mask-image/, /vector-effect/, /shape-rendering/, /type="scale" values="[^"]*-/]) {
   if (bad.test(svg)) throw new Error(`scene holds markup the app drops: ${bad}`);
 }
 const styleText = /<style>([\s\S]*?)<\/style>/.exec(svg)[1];
