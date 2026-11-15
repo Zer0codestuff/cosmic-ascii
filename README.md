@@ -2,13 +2,15 @@
 
 A theme for the Claude Code desktop and mobile apps. Every surface is pure
 black, so an OLED screen keeps its pixels off, and behind the conversation an
-ASCII solar system turns: the Sun with slowly boiling granulation, Earth and
-Mars spinning, each world shaded from the Sun with moving phases, an asteroid
-belt, dotted orbits and a field of stars.
+ASCII solar system turns: the Sun with slowly boiling granulation, Earth,
+Mars and Jupiter spinning (the Great Red Spot crosses the disc), each world
+shaded from the Sun with moving phases, the Moon and Jupiter's four great
+moons, a comet on a real elliptical orbit whose tail always points away from
+the Sun, shooting stars, an asteroid belt, dotted orbits and a field of stars.
 
 Planets keep their real order of speed, compressed so the outer worlds still
-visibly move: a period of 40 s times the square root of the real one in years
-(Mercury about 20 s, Earth 40 s, Neptune about 8.5 min).
+visibly move: a period of 50 s times the square root of the real one in years
+(Mercury about 25 s, Earth 50 s, Neptune about 10.7 min).
 
 The terminal and editor extensions do not draw themes.
 

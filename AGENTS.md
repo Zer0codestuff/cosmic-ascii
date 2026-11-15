@@ -44,14 +44,14 @@ branch `codex/cosmic-zoom-polish`, WebGL ASCII renderer in `src/gl/`).
 - Light and phases: a black gradient shade over each globe; its rotation and
   terminator (gradient x1/x2) follow 16 keys per orbit, interpolated by SMIL. Phases are softened
   (`t0 = -0.45 * L.V`) and the night side keeps alpha ~0.5.
-- Spin: Earth 32 frames / 32 s, Mars 12 frames / 30 s; cells that never
-  change are drawn once.
-- Sun: static disc plus three noise-clumped granule layers that breathe in
-  opacity. No corona.
+- Spin: Earth 12 frames / 32 s, Mars 10 / 34 s, Jupiter 12 / 44 s (spot
+  patches only); cells that never change are drawn once.
+- Sun: full disc always drawn, plus three brighter granule layers fading
+  in and out over it. No corona, no halo.
 - Mercury and Venus cross the Sun: a back copy and a front copy, each with a
   discrete opacity window for the far half of the orbit.
 - Tall boxes zoom on the inner system through `xMidYMid slice` framing.
-- Speeds: period = 40 s x sqrt(real sidereal period in years).
+- Speeds: period = 50 s x sqrt(real sidereal period in years).
 - When the app stops motion it removes SMIL elements and nulls CSS animation
   itself (see below), so reduced motion is honoured without a media query.
 
@@ -85,40 +85,50 @@ with the tsconfig from the types header (`jsxFactory: h`).
   `<iframe sandbox="" srcdoc>`; to preview the still mode, strip the SMIL
   elements and add the `animation:none` style.
 
-## Current status (2026-11-15, v0.9.0)
+## Current status (2026-11-15, v1.0.0)
 
-- ROOT CAUSE of "the planets never move", measured in the app itself (screen
-  captures diffed automatically, two cycles, deterministic): the desktop app
-  freezes EVERY animation in a backdrop scene (CSS and SMIL, at time zero)
-  when the scene holds any of:
-  - a viewport media query, e.g. `@media (min-width:1px)` or
-    `@media (max-aspect-ratio:1/1)`, even matching no element;
-  - a CSS `mask-image` (tested with `linear-gradient`), even unused;
-  - probably `vector-effect="non-scaling-stroke"` (the stripped scene body
-    froze; removed to be safe, not isolated).
-  These do NOT freeze: `@media (prefers-reduced-motion)`, SMIL
-  `calcMode="discrete"`, `<animate attributeName="class">`, `<tspan>`,
-  `#rgba` colours, `transform-box`, `transform:matrix()`, plain rules.
-  The browser pane (same pipeline, same DOMPurify 3.4.17) animates all of
-  them, so the cause is in the app window, not in the markup.
-- Earlier "cal" theory (v0.8.0) was wrong: it came from by-eye reports.
-- v0.9.0: lighting is a black gradient shade over each globe (one
-  `<linearGradient id="shN">` per planet in `<defs>`, its x1/x2 and the
-  shade's rotation animated with SMIL, smooth); root uses
-  `preserveAspectRatio="xMidYMid slice"` instead of portrait media queries
-  (tall windows zoom on the inner system by themselves); no vector-effect,
-  belt stroke 2.4. The build refuses viewport media queries, mask-image and
-  vector-effect. ids and `url(#...)` are fine (Night Reef uses them).
-- Verified in Chromium; in-app check by screen capture pending at the time
-  of writing.
+- v1.0.0, asked by the owner: planets with more resolution and detail, the
+  Sun's "pixels switching off" removed, everything a little slower, and
+  "surprise me".
+  - Glyphs 6 -> 4.8 (about 1.6x the cells), planets about 10% larger,
+    Sun R 90; orbits moved out so Earth's globe still clears the Sun.
+  - Sun: the full disc is always drawn; three layers of the same glyphs in a
+    brighter colour fade 0 -> .95 -> 0 over it (13, 16.4, 20 s). The old
+    version faded a third of the disc down to 30% with nothing beneath:
+    that was the flicker.
+  - Speed: Earth orbit 40 -> 50 s (all orbits follow), spins and twinkles
+    slower.
+  - Jupiter spins (12 frames, 44 s). Its band turbulence repeats exactly 12
+    times around (JUPITER_REPEAT), so every frame equals a spotless base;
+    per frame only the Great Red Spot's cells are drawn, on black backing
+    rects. That keeps the spin at ~12k instead of ~84k.
+  - Per-body colour saturation (`sat`), applied after the palette snap.
+  - New: the Moon around Earth; Io, Europa, Ganymede, Callisto around
+    Jupiter (back copy hidden by the globe's black backing, front copy over
+    it, opacity windows by half-orbit); a comet on a Kepler ellipse (e 0.8,
+    inclined 18 deg, 170 s) whose tail always points away from the Sun and
+    lengthens near perihelion (nested translate, rotate, scale animations);
+    four shooting stars on 23-53 s cycles.
+  - Scene ~126k of 131,072 characters: little room left. Earth (12 frames,
+    ~34k) and the Sun (~15k) are the largest parts.
+- Verified in the app by screen capture: everything moves; Saturn and its
+  rings render cleanly at full resolution.
+- Tried and rejected: two stacked Svg leaves in the Backdrop tree (to double
+  the size budget). The top layer is transparent, but the app froze both
+  layers' animations.
+- ROOT CAUSE of frozen scenes (v0.9.0, measured in the app): a viewport
+  media query, a CSS mask-image, or (probably) vector-effect anywhere in the
+  scene freezes every animation in it. `@media (prefers-reduced-motion)`,
+  SMIL discrete/class animations, tspans, gradients by id are fine.
 - Lab method (reuse it): a temporary mode in register.tsx that cycles
-  `$.theme.set` through variants every 8 s aligned to the wall clock
-  (`floor(now/8000) % N`), each with a SMIL probe dot (left edge) and a CSS
-  probe dot (right edge); `screencapture` from the shell (Screen Recording
-  permission granted) and a PIL script measuring each dot's angle. Removed
-  from the mod after use.
-- `/cosmic` applies the theme, `/cosmic off` clears it. `/custom-theme`
-  belongs to theme-examples.
+  `$.theme.set` through variants every 8 s aligned to the wall clock, each
+  with SMIL and CSS probe dots; `screencapture` from the shell (Screen
+  Recording permission granted) and a PIL script measuring the dots. The
+  browser pane often returns black frames for the scene; the app capture
+  is the reliable check.
+- `/cosmic` applies the theme, `/cosmic off` clears it.
+- Published: github.com/Zer0codestuff/cosmic-ascii (public, MIT); the repo
+  copy lives in ~/Documents/cosmic-ascii.
 - Mobile layout only verified by measurement, not on a device.
 
 ## Preferences and constraints
@@ -139,6 +149,8 @@ with the tsconfig from the types header (`jsxFactory: h`).
 ## Do not
 
 - Do not use the real Kepler ratios (outer planets would look frozen).
+- Do not fade parts of the Sun toward dark: the owner hated cells "switching off".
+- Do not stack two Svg leaves in the backdrop: it freezes them.
 - Do not add a glow or halo around the Sun (owner rejected it).
 - Do not make planets dim or their dark side invisible (owner rejected it).
 - Do not lighten panels or menus above #000000 unless the owner asks.
