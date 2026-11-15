@@ -800,31 +800,40 @@ function cometMarkup() {
 // ---------------------------------------------------------------- the astronaut
 
 /**
- * Claude Code's mascot in a space helmet, drawn here as pixel art. Every
- * three minutes it floats across twice (left to right high, then right to
- * left low, turned to face its way), bobbing, swaying and paddling its legs.
- * It rests hidden, so a scene with motion turned off shows no mascot.
+ * Claude Code's mascot, a pixel-art body inside a space helmet drawn in the
+ * scene's own ASCII glyphs. Every three minutes it floats across twice (left
+ * to right high, then right to left low, turned to face its way), bobbing and
+ * swaying. The dome is open glass: stars and orbits show through it. It rests
+ * hidden, so a scene with motion turned off shows no mascot.
  */
-const ASTRONAUT = [
-  '......WWWWWWW......',
-  '....WW.......WW....',
-  '...W.........HHW...',
-  '..W...........H.W..',
-  '..W.OOOOOOOOOOO.W..',
-  '.W..OOOOOOOOOOO..W.',
-  '.W..OOKOOOOOKOO..W.',
+const ASTRONAUT_BODY = [
+  '...................',
+  '...................',
+  '...................',
+  '...................',
+  '....OOOOOOOOOOO....',
+  '....OOOOOOOOOOO....',
+  '....OOKOOOOOKOO....',
   'OOOOOOKOOOOOKOOOOOO',
-  'OOWWWWWWWWWWWWWWWOO',
+  'OOOOWWWWWWWWWWWOOOO',
   '....OOOOOOOOOOO....',
   '....OOOOOOOOOOO....',
+  '....O.O.....O.O....',
+  '....O.O.....O.O....',
 ];
-const ASTRONAUT_LEGS = [
-  ['....O.O.....O.O....', '....O.O.....O.O....'],
-  ['....O.O.....O.O....', '.....O.O.....O.O...'],
+const ASTRONAUT_INK = { O: '#d97757', K: '#000', W: '#e9e5dd' };
+/** Pixel size of the body, in SVG units. */
+const ASTRONAUT_PX = 3.6;
+const HELMET = [
+  "     _.-'''''-._     ",
+  "   .'          *'.   ",
+  "  /               \\  ",
+  " |                 | ",
+  " |                 | ",
+  "  \\               /  ",
 ];
-const ASTRONAUT_INK = { O: '#d97757', K: '#000', W: '#e9e5dd', H: '#fff' };
 
-function pixelPaths(rows, top = 0) {
+function pixelPaths(rows) {
   const runs = {};
   rows.forEach((row, r) => {
     let c = 0;
@@ -833,24 +842,39 @@ function pixelPaths(rows, top = 0) {
       if (ch === '.') { c++; continue; }
       let e = c;
       while (e < row.length && row[e] === ch) e++;
-      runs[ch] = (runs[ch] ?? '') + `M${c} ${r + top}h${e - c}v1.06h${c - e}z`;
+      // Rows overlap a hair so no seam shows between them.
+      runs[ch] = (runs[ch] ?? '') + `M${c} ${r}h${e - c}v1.06h${c - e}z`;
       c = e;
     }
   });
   return Object.entries(runs).map(([ch, d]) => `<path fill="${ASTRONAUT_INK[ch]}" d="${d}"/>`).join('');
 }
 
+function helmetGrid() {
+  const cols = Math.max(...HELMET.map((r) => r.length)), rows = HELMET.length;
+  const cells = [];
+  for (const row of HELMET) {
+    for (let c = 0; c < cols; c++) {
+      const ch = row[c] ?? ' ';
+      cells.push(ch === ' ' ? null : { ch, fill: ch === '*' ? '#fff' : '#bbb' });
+    }
+  }
+  return { cols, rows, cells };
+}
+
 function astronautMarkup() {
-  const T = 180, P = 4.6;
-  const W = ASTRONAUT[0].length, H = ASTRONAUT.length + 2;
-  const legs = ASTRONAUT_LEGS.map((frame, i) =>
-    `<g visibility="${i ? 'hidden' : 'visible'}">${discrete('visibility', i ? ['hidden', 'visible'] : ['visible', 'hidden'], [0, 0.5], 0.9)}${pixelPaths(frame, ASTRONAUT.length)}</g>`).join('');
-  const body = `${pixelPaths(ASTRONAUT)}${legs}`;
-  const place = `translate(${num(-W * P / 2)} ${num(-H * P / 2)}) scale(${P})`;
+  const T = 180, P = ASTRONAUT_PX;
+  const W = ASTRONAUT_BODY[0].length, H = ASTRONAUT_BODY.length;
+  const body = `<g transform="translate(${num(-W * P / 2)} ${num(-H * P / 2)}) scale(${P})">${pixelPaths(ASTRONAUT_BODY)}</g>`;
+  // The helmet's last row sits on the collar (pixel row 8): its sides close
+  // there, and the arms poke out past them.
+  const collarY = (8.5 - H / 2) * P;
+  const lastRowY = (HELMET.length - 1 - HELMET.length / 2 + 0.5) * CH;
+  const helmet = `<g transform="translate(0 ${num(collarY - lastRowY)})">${gridText(helmetGrid())}</g>`;
+  const art = `${body}${helmet}`;
   // Facing right, and a mirrored copy facing left for the return pass; a
-  // discrete visibility switch picks one (no scale animation, no
-  // shape-rendering: the app froze the scene with them).
-  const facing = (flip) => `<g transform="${flip ? `scale(-1 1) ` : ''}${place}">${body}</g>`;
+  // discrete visibility switch picks one.
+  const facing = (flip) => (flip ? `<g transform="scale(-1 1)">${art}</g>` : art);
   // Two passes per cycle, as fractions of T: [start, end] and their paths.
   const A = [0.05, 0.22], B = [0.55, 0.72];
   const pathA = [[-120, 640], [480, 430], [1020, 320], [1720, 170]];
@@ -865,8 +889,8 @@ function astronautMarkup() {
   const show = `0;${k(A[0])};${k(A[0] + fade)};${k(A[1] - fade)};${k(A[1])};${k(B[0])};${k(B[0] + fade)};${k(B[1] - fade)};${k(B[1])};1`;
   return `<g opacity="0"><animate attributeName="opacity" values="0;0;1;1;0;0;1;1;0;0" keyTimes="${show}" dur="${sec(T)}" repeatCount="indefinite"/>` +
     `<g transform="translate(${pathA[0][0]} ${pathA[0][1]})"><animateTransform attributeName="transform" type="translate" values="${vals.join(';')}" keyTimes="${keys.map(k).join(';')}" calcMode="spline" keySplines="${keys.slice(1).map(() => '.4 0 .6 1').join(';')}" dur="${sec(T)}" repeatCount="indefinite"/>` +
-    `<g><animateTransform attributeName="transform" type="translate" values="0 0;0 -9;0 0" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="4.6s" repeatCount="indefinite"/>` +
-    `<g><animateTransform attributeName="transform" type="rotate" values="-9;7;-9" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="7.4s" repeatCount="indefinite"/>` +
+    `<g><animateTransform attributeName="transform" type="translate" values="0 0;0 -6;0 0" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="5.2s" repeatCount="indefinite"/>` +
+    `<g><animateTransform attributeName="transform" type="rotate" values="-7;5;-7" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="8.4s" repeatCount="indefinite"/>` +
     `<g visibility="visible">${discrete('visibility', ['visible', 'hidden', 'visible'], [0, (A[1] + B[0]) / 2, (B[1] + 1) / 2], T)}${facing(false)}</g>` +
     `<g visibility="hidden">${discrete('visibility', ['hidden', 'visible', 'hidden'], [0, (A[1] + B[0]) / 2, (B[1] + 1) / 2], T)}${facing(true)}</g>` +
     `</g></g></g></g>`;

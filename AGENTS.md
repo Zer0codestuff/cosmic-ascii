@@ -118,6 +118,12 @@ with the tsconfig from the types header (`jsxFactory: h`).
   two-frame leg paddle. It rests hidden (opacity 0), so with motion off it
   never shows. Drawn by the scene itself; no artwork file is copied. Checked
   as rendered from the scene.
+- v1.2.0 (owner): mascot smaller (pixel 4.6 -> 3.6 units) with still
+  feet (the owner disliked the paddling), and only the helmet in ASCII: a
+  glyph dome (`HELMET` rows, glint `*`) around the unchanged pixel body,
+  its last row closing at the collar, arms poking out of the sides. The
+  owner rejected an all-ASCII mascot: keep the pixel body. Seen floating in
+  an app capture with the scene moving.
 - v1.1.0 froze the whole scene again (measured: no pixel changed in 2 s).
   The mascot had brought two features new to the scene:
   `shape-rendering="crispEdges"` and a discrete `scale` animation with
@@ -168,6 +174,8 @@ with the tsconfig from the types header (`jsxFactory: h`).
 - Do not use the real Kepler ratios (outer planets would look frozen).
 - Do not fade parts of the Sun toward dark: the owner hated cells "switching off".
 - Do not stack two Svg leaves in the backdrop: it freezes them.
+- Do not redraw the mascot's body in ASCII or make its feet paddle (owner
+  rejected both); only its helmet is ASCII.
 - Screen captures for checks only while the Claude window is in front; delete
   any capture that shows another app, unread.
 - Do not add a glow or halo around the Sun (owner rejected it).
