@@ -117,8 +117,15 @@ with the tsconfig from the types header (`jsxFactory: h`).
   right to left low at 99-130 s, flipped to face its way), bob, sway and a
   two-frame leg paddle. It rests hidden (opacity 0), so with motion off it
   never shows. Drawn by the scene itself; no artwork file is copied. Checked
-  as rendered from the scene; its flight not yet seen in the app (the window
-  was not in front during the capture).
+  as rendered from the scene.
+- v1.1.0 froze the whole scene again (measured: no pixel changed in 2 s).
+  The mascot had brought two features new to the scene:
+  `shape-rendering="crispEdges"` and a discrete `scale` animation with
+  negative values (to face left). v1.1.1 drops both (rows overlap by 0.06
+  to hide seams; the left-facing pose is a pre-mirrored copy switched by
+  visibility) and the scene moves again, mascot included (seen floating in
+  an app capture). Which of the two froze it was not isolated; the build
+  refuses both.
 - Verified in the app by screen capture: everything moves; Saturn and its
   rings render cleanly at full resolution.
 - Tried and rejected: two stacked Svg leaves in the Backdrop tree (to double
@@ -150,8 +157,10 @@ with the tsconfig from the types header (`jsxFactory: h`).
   (the shade gradients use them). The app itself drops `<a>`, `image`,
   `foreignObject`, scripts and non-local `href`.
 - Keep `width="100%" height="100%"` on the root `<svg>`.
-- Never use viewport media queries, CSS `mask-image` or `vector-effect` in
-  the scene: each one freezes the whole scene in the desktop app.
+- Never use viewport media queries, CSS `mask-image`, `vector-effect`,
+  `shape-rendering` or a negative `scale` animation in the scene: they
+  freeze the whole scene in the desktop app. After any new SVG feature,
+  measure motion in the app before calling it done.
 - English for all files; no em dashes.
 
 ## Do not
@@ -166,5 +175,6 @@ with the tsconfig from the types header (`jsxFactory: h`).
 - Do not lighten panels or menus above #000000 unless the owner asks.
 - Do not hand-edit `hooks/scene.ts` or `hooks/make-colors.js`.
 - Do not ship diagnostic scenes or a look without `colors` in this folder: every new session loads it.
-- Do not add viewport media queries, CSS masks or vector-effect to the scene.
+- Do not add viewport media queries, CSS masks, vector-effect, shape-rendering
+  or negative scale animations to the scene.
 - Do not call `$.theme.clear()` at start or reload.
