@@ -797,6 +797,75 @@ function cometMarkup() {
     `<g transform="scale(${num(L[0])} 1)">${anim('scale', L.map((l) => `${num(l)} 1`))}${tail}</g>${head}</g></g>`;
 }
 
+// ---------------------------------------------------------------- the astronaut
+
+/**
+ * Claude Code's mascot in a space helmet, drawn here as pixel art. Every
+ * three minutes it floats across twice (left to right high, then right to
+ * left low, turned to face its way), bobbing, swaying and paddling its legs.
+ * It rests hidden, so a scene with motion turned off shows no mascot.
+ */
+const ASTRONAUT = [
+  '......WWWWWWW......',
+  '....WW.......WW....',
+  '...W.........HHW...',
+  '..W...........H.W..',
+  '..W.OOOOOOOOOOO.W..',
+  '.W..OOOOOOOOOOO..W.',
+  '.W..OOKOOOOOKOO..W.',
+  'OOOOOOKOOOOOKOOOOOO',
+  'OOWWWWWWWWWWWWWWWOO',
+  '....OOOOOOOOOOO....',
+  '....OOOOOOOOOOO....',
+];
+const ASTRONAUT_LEGS = [
+  ['....O.O.....O.O....', '....O.O.....O.O....'],
+  ['....O.O.....O.O....', '.....O.O.....O.O...'],
+];
+const ASTRONAUT_INK = { O: '#d97757', K: '#000', W: '#e9e5dd', H: '#fff' };
+
+function pixelPaths(rows, top = 0) {
+  const runs = {};
+  rows.forEach((row, r) => {
+    let c = 0;
+    while (c < row.length) {
+      const ch = row[c];
+      if (ch === '.') { c++; continue; }
+      let e = c;
+      while (e < row.length && row[e] === ch) e++;
+      runs[ch] = (runs[ch] ?? '') + `M${c} ${r + top}h${e - c}v1h${c - e}z`;
+      c = e;
+    }
+  });
+  return Object.entries(runs).map(([ch, d]) => `<path fill="${ASTRONAUT_INK[ch]}" d="${d}"/>`).join('');
+}
+
+function astronautMarkup() {
+  const T = 180, P = 4.6;
+  const W = ASTRONAUT[0].length, H = ASTRONAUT.length + 2;
+  const legs = ASTRONAUT_LEGS.map((frame, i) =>
+    `<g visibility="${i ? 'hidden' : 'visible'}">${discrete('visibility', i ? ['hidden', 'visible'] : ['visible', 'hidden'], [0, 0.5], 0.9)}${pixelPaths(frame, ASTRONAUT.length)}</g>`).join('');
+  const sprite = `<g transform="translate(${num(-W * P / 2)} ${num(-H * P / 2)}) scale(${P})" shape-rendering="crispEdges">${pixelPaths(ASTRONAUT)}${legs}</g>`;
+  // Two passes per cycle, as fractions of T: [start, end] and their paths.
+  const A = [0.05, 0.22], B = [0.55, 0.72];
+  const pathA = [[-120, 640], [480, 430], [1020, 320], [1720, 170]];
+  const pathB = [[1720, 300], [1150, 520], [560, 620], [-120, 770]];
+  const keys = [], vals = [];
+  const along = (span, pts) => pts.forEach((p, i) => { keys.push(span[0] + ((span[1] - span[0]) * i) / (pts.length - 1)); vals.push(`${p[0]} ${p[1]}`); });
+  keys.push(0); vals.push(`${pathA[0][0]} ${pathA[0][1]}`);
+  along(A, pathA); along(B, pathB);
+  keys.push(1); vals.push(`${pathB[3][0]} ${pathB[3][1]}`);
+  const k = (x) => Math.round(x * 1e4) / 1e4;
+  const fade = 1.5 / T;
+  const show = `0;${k(A[0])};${k(A[0] + fade)};${k(A[1] - fade)};${k(A[1])};${k(B[0])};${k(B[0] + fade)};${k(B[1] - fade)};${k(B[1])};1`;
+  return `<g opacity="0"><animate attributeName="opacity" values="0;0;1;1;0;0;1;1;0;0" keyTimes="${show}" dur="${sec(T)}" repeatCount="indefinite"/>` +
+    `<g transform="translate(${pathA[0][0]} ${pathA[0][1]})"><animateTransform attributeName="transform" type="translate" values="${vals.join(';')}" keyTimes="${keys.map(k).join(';')}" calcMode="spline" keySplines="${keys.slice(1).map(() => '.4 0 .6 1').join(';')}" dur="${sec(T)}" repeatCount="indefinite"/>` +
+    `<g><animateTransform attributeName="transform" type="translate" values="0 0;0 -9;0 0" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="4.6s" repeatCount="indefinite"/>` +
+    `<g><animateTransform attributeName="transform" type="rotate" values="-9;7;-9" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="7.4s" repeatCount="indefinite"/>` +
+    `<g><animateTransform attributeName="transform" type="scale" values="1 1;-1 1;1 1" keyTimes="0;${k((A[1] + B[0]) / 2)};${k((B[1] + 1) / 2)}" calcMode="discrete" dur="${sec(T)}" repeatCount="indefinite"/>` +
+    `${sprite}</g></g></g></g></g>`;
+}
+
 // ---------------------------------------------------------------- shooting stars
 
 function meteorsMarkup() {
@@ -845,10 +914,11 @@ for (const p of [...planets].reverse()) {
 
 const meteors = meteorsMarkup();
 const comet = cometMarkup();
-report.push(`comet: ${comet.length}  meteors: ${meteors.length}`);
+const astronaut = astronautMarkup();
+report.push(`comet: ${comet.length}  meteors: ${meteors.length}  astronaut: ${astronaut.length}`);
 const fillCss = [...classes].map(([fill, cls]) => `.${cls}{fill:${fill}}`).join('');
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEW.w} ${VIEW.h}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>svg{background:#000}text{font-family:Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace;font-size:${FONT}px;white-space:pre;dominant-baseline:central}${fillCss}.ORB{fill:none;stroke:#fff;stroke-opacity:.17;stroke-width:1.3;stroke-linecap:round;stroke-dasharray:0 7}.BELT path{stroke:#bfb6a6;stroke-opacity:.45;stroke-width:2.4;stroke-linecap:round}.TW{font-size:10px;fill:#ccd6ff}.MD{font-size:9px;text-anchor:middle;dominant-baseline:central}.CT{font-size:6.5px}.CH{font-size:10px;text-anchor:middle;dominant-baseline:central}${css.join('')}</style><defs>${shades.join('')}</defs><rect x="-1200" y="-1600" width="4000" height="4000" fill="#000"/>${starField()}${twinkles()}${meteors}<g><g transform="translate(${CENTRE.x} ${CENTRE.y})"><rect x="-1000" y="-700" width="2000" height="1400" fill="none"/><g class="ORB">${orbitMarkup}</g>${beltMarkup()}${sun.corona}<g transform="scale(1 ${K})">${back.join('')}</g>${sun.disc}<g transform="scale(1 ${K})">${front.join('')}</g>${comet}</g></g></svg>`;
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEW.w} ${VIEW.h}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>svg{background:#000}text{font-family:Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace;font-size:${FONT}px;white-space:pre;dominant-baseline:central}${fillCss}.ORB{fill:none;stroke:#fff;stroke-opacity:.17;stroke-width:1.3;stroke-linecap:round;stroke-dasharray:0 7}.BELT path{stroke:#bfb6a6;stroke-opacity:.45;stroke-width:2.4;stroke-linecap:round}.TW{font-size:10px;fill:#ccd6ff}.MD{font-size:9px;text-anchor:middle;dominant-baseline:central}.CT{font-size:6.5px}.CH{font-size:10px;text-anchor:middle;dominant-baseline:central}${css.join('')}</style><defs>${shades.join('')}</defs><rect x="-1200" y="-1600" width="4000" height="4000" fill="#000"/>${starField()}${twinkles()}${meteors}<g><g transform="translate(${CENTRE.x} ${CENTRE.y})"><rect x="-1000" y="-700" width="2000" height="1400" fill="none"/><g class="ORB">${orbitMarkup}</g>${beltMarkup()}${sun.corona}<g transform="scale(1 ${K})">${back.join('')}</g>${sun.disc}<g transform="scale(1 ${K})">${front.join('')}</g>${comet}</g></g>${astronaut}</svg>`;
 
 for (const bad of [/href=/, /<use\b/, /<a[\s>]/, /\sstyle=/, /@media\s*\((?!prefers-)/, /mask-image/, /vector-effect/]) {
   if (bad.test(svg)) throw new Error(`scene holds markup the app drops: ${bad}`);

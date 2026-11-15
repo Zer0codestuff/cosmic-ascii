@@ -6,7 +6,8 @@ ASCII solar system turns: the Sun with slowly boiling granulation, Earth,
 Mars and Jupiter spinning (the Great Red Spot crosses the disc), each world
 shaded from the Sun with moving phases, the Moon and Jupiter's four great
 moons, a comet on a real elliptical orbit whose tail always points away from
-the Sun, shooting stars, an asteroid belt, dotted orbits and a field of stars.
+the Sun, shooting stars, Claude Code's mascot floating by in a space
+helmet every few minutes, an asteroid belt, dotted orbits and a field of stars.
 
 Planets keep their real order of speed, compressed so the outer worlds still
 visibly move: a period of 50 s times the square root of the real one in years
