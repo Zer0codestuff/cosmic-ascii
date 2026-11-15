@@ -1,0 +1,13 @@
+{
+  "name": "cosmic-ascii",
+  "description": "Cosmic ASCII: a pure black Claude Code theme with an animated ASCII solar system",
+  "owner": {
+    "name": "Zer0codestuff"
+  },
+  "plugins": [
+    {
+      "name": "cosmic-ascii",
+      "source": "./"
+    }
+  ]
+}
