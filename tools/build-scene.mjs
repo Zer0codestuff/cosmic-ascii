@@ -3,14 +3,12 @@
 // Each body is rendered in 3D (orthographic camera above the orbital plane)
 // into a character grid with the ASCII pipeline of the author's site (Menlo glyph
 // ramp, tone curve, Sobel contour glyphs). Globes are rendered fully lit; the
-// Sun's light and the phases come from one CSS gradient mask per planet whose
-// angle and terminator are animated in step with the orbit. Orbits are CSS
-// rotations on a flattened plane. No script runs in the scene.
+// Sun's light and the phases come from a gradient shade over each globe that
+// turns with the orbit. All motion is SMIL. No script runs in the scene.
 //
-// Markup rules the desktop app enforces (learnt the hard way):
-// - no id references of any kind (url(#..), href, <use>, <defs> paint servers);
-// - no inline style attributes and no <a>: every timing lives in a class;
-// - at most 131,072 characters.
+// Rules measured in the desktop app (any of these freezes the whole scene):
+// no viewport media query, no CSS mask-image, no vector-effect. The build
+// refuses them. The source must stay under 131,072 characters.
 //
 // Run: node tools/build-scene.mjs [preview-dir]
 
@@ -29,19 +27,21 @@ const CENTRE = { x: 800, y: 450 };
 const K = 0.4;
 const ELEVATION = Math.asin(K);
 /** Cell size in SVG units. Height is twice the width, as in a terminal. */
-const FONT = 6;
+const FONT = 4.8;
 const CW = FONT * 0.6;
 const CH = CW * 2;
 /** Orbit transforms step on a shared tick so repaints coincide. */
 const FPS = 20;
 /** Seconds per Earth orbit; other periods follow sqrt(real period). */
-const EARTH_PERIOD = 40;
+const EARTH_PERIOD = 50;
 /** Overall glyph brightness under the chat. */
 const GAIN = 0.95;
 /** Brightness steps per colour. */
 const LEVELS = 4;
 /** Keyframes per orbit for the light mask. */
 const MASK_KEYS = 16;
+/** Jupiter's band pattern repeats this many times around; equals its spin frames. */
+const JUPITER_REPEAT = 12;
 /** Planets are lit for beauty, not physics: bright and dense. */
 const PLANET_EXPOSURE = 1.9;
 
@@ -56,6 +56,7 @@ const period = (name) => EARTH_PERIOD * Math.sqrt(REAL[name]);
 const TINT = {
   sun: [1.0, 0.62, 0.16],
   mercury: [0.72, 0.68, 0.62],
+  moon: [0.8, 0.78, 0.74],
   venus: [1.0, 0.74, 0.38],
   earth: [1, 1, 1],
   mars: [1.0, 0.34, 0.16],
@@ -70,19 +71,26 @@ const TINT = {
 // Earth's orbit keeps its globe clear of the Sun's disc, so only Mercury and
 // Venus need a second copy drawn over the Sun.
 const BODIES = [
-  { name: 'mercury', flat: true, kind: 'rock', R: 18, orbit: 140, angle: -165 },
-  { name: 'venus', flat: true, kind: 'cloud', R: 28, orbit: 205, angle: 45 },
-  { name: 'earth', kind: 'earth', R: 38, orbit: 300, angle: -120, tilt: 23.4, spin: { n: 16, period: 24 }, levels: 2, palette: [[0.25, 0.55, 1], [0.55, 0.8, 0.35], [1, 0.82, 0.55], [1, 1, 1]] },
-  { name: 'mars', kind: 'rock', R: 25, orbit: 370, angle: 130, tilt: 25, caps: true, spin: { n: 8, period: 24 }, levels: 2, palette: [[1, 0.42, 0.22], [1, 0.62, 0.42], [1, 0.97, 0.94]] },
-  { name: 'jupiter', kind: 'jupiter', R: 70, orbit: 510, angle: -175, tilt: 3, levels: 3, palette: [[1, 0.86, 0.66], [1, 0.64, 0.36], [0.85, 0.47, 0.25], [1, 0.33, 0.18]] },
-  { name: 'saturn', flat: true, kind: 'saturn', R: 48, orbit: 626, angle: -10, rings: true },
-  { name: 'uranus', flat: true, kind: 'cloud', R: 34, orbit: 712, angle: -100, tilt: 98 },
-  { name: 'neptune', flat: true, kind: 'neptune', R: 33, orbit: 767, angle: 65, tilt: 28 },
-  { name: 'pluto', flat: true, kind: 'rock', R: 13, orbit: 797, angle: -45 },
+  { name: 'mercury', flat: true, kind: 'rock', R: 20, orbit: 145, angle: -165 },
+  { name: 'venus', flat: true, kind: 'cloud', sat: 2, R: 31, orbit: 215, angle: 45 },
+  { name: 'earth', kind: 'earth', R: 42, orbit: 330, angle: -120, tilt: 23.4, spin: { n: 12, period: 32 }, levels: 2, palette: [[0.25, 0.55, 1], [0.55, 0.8, 0.35], [1, 0.82, 0.55], [1, 1, 1]],
+    moons: [{ name: 'moon', R: 7, r: 1.95, k: 0.32, period: 27, start: 40 }] },
+  { name: 'mars', kind: 'rock', R: 28, orbit: 400, angle: 130, tilt: 25, caps: true, spin: { n: 10, period: 34 }, levels: 2, sat: 1.8, palette: [[1, 0.42, 0.22], [1, 0.62, 0.42], [1, 0.97, 0.94]] },
+  { name: 'jupiter', kind: 'jupiter', R: 78, orbit: 545, angle: -175, tilt: 3, spin: { n: JUPITER_REPEAT, period: 44 }, levels: 3, sat: 3, palette: [[1, 0.86, 0.66], [1, 0.64, 0.36], [0.85, 0.47, 0.25], [1, 0.33, 0.18]],
+    moons: [
+      { dot: '#ffe08a', r: 1.4, k: 0.1, period: 9, start: 20 },
+      { dot: '#e8e4dc', r: 1.75, k: 0.1, period: 18, start: 200 },
+      { dot: '#c8b8a0', r: 2.2, k: 0.1, period: 36, start: 110 },
+      { dot: '#9a8f86', r: 2.85, k: 0.1, period: 84, start: 300 },
+    ] },
+  { name: 'saturn', flat: true, kind: 'saturn', sat: 2, R: 52, orbit: 640, angle: -10, rings: true },
+  { name: 'uranus', flat: true, kind: 'cloud', R: 36, orbit: 715, angle: -100, tilt: 98 },
+  { name: 'neptune', flat: true, kind: 'neptune', R: 35, orbit: 765, angle: 65, tilt: 28 },
+  { name: 'pluto', flat: true, kind: 'rock', R: 14, orbit: 797, angle: -45 },
 ];
-const SUN_R = 80;
+const SUN_R = 90;
 const SUN_EXPOSURE = 1.6;
-const BELT = { inner: 405, outer: 432 };
+const BELT = { inner: 438, outer: 466 };
 const crossesSun = (b) => b.orbit * K - b.R < SUN_R;
 
 // ---------------------------------------------------------------- math
@@ -170,7 +178,7 @@ const srgb = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) -
  * `flatTint` keeps a one-colour world in one hue; brightness lives in glyph
  * density and LEVELS steps of the fill.
  */
-function resolveGlyphs(colors, cols, rows, flatTint, levels = LEVELS, palette = null) {
+function resolveGlyphs(colors, cols, rows, flatTint, levels = LEVELS, palette = null, sat = 1) {
   const lum = colors.map((c) => (c ? dot(c, LUMA) : 0));
   const at = (c, r) => (c < 0 || r < 0 || c >= cols || r >= rows ? 0 : lum[r * cols + c]);
   const out = new Array(cols * rows).fill(null);
@@ -208,6 +216,8 @@ function resolveGlyphs(colors, cols, rows, flatTint, levels = LEVELS, palette = 
       }
       tint = best;
     }
+    // Quantised tints drift toward pastel; a per-body exponent keeps them rich.
+    if (sat !== 1) tint = tint.map((t) => Math.pow(t, sat));
     const level = Math.ceil(srgb(clamp(brightness * present * GAIN, 0, 1)) * levels) / levels;
     const q = tint.map((t) => Math.round(srgb(Math.round(t * 4) / 4) * level * 15));
     if (ch === ' ' || (q[0] === 0 && q[1] === 0 && q[2] === 0)) continue;
@@ -288,14 +298,21 @@ function shadePlanet(body, n, spinAngle) {
     const decks = fbm(u * 7, v * 20 + grain * 0.9);
     albedo = 0.3 + 0.5 * decks + 0.12 * Math.sin(v * 44 + decks * 5);
   } else if (body.kind === 'jupiter') {
-    // Belts follow latitude; turbulence is mild so most glyphs hold still
-    // between spin frames while the Great Red Spot travels across.
-    const turbulence = fbm(u * 18, v * 9);
-    const belts = Math.sin(v * 58 + turbulence * 2.2 + Math.sin(u * 18) * 0.25);
-    albedo = 0.42 + belts * 0.32 + grain * 0.08;
+    // Belts follow latitude. Their turbulence repeats exactly JUPITER_REPEAT
+    // times around the planet, one repeat per spin frame, so every frame is
+    // the same picture except the Great Red Spot, which travels across: the
+    // spin costs only the spot's cells.
+    const ja = 2 * Math.PI * u * JUPITER_REPEAT;
+    const jx = Math.cos(ja) * 1.7, jy = Math.sin(ja) * 1.7;
+    const turbulence = fbm(jx + 3.1, v * 9 + jy);
+    const jgrain = fbm(jx * 2.3 + 7.7, v * 22 + jy * 2.3);
+    const belts = Math.sin(v * 58 + turbulence * 2.4 + Math.sin(ja) * 0.22);
+    albedo = 0.42 + belts * 0.32 + jgrain * 0.1;
     pigment = mix3(tint.map((t, i) => t * [0.78, 0.55, 0.38][i]), [1.0, 0.92, 0.78], smoothstep(-0.5, 0.65, belts));
-    const sx = (u - 0.62) * 13, sy = (v - 0.4) * 24;
-    const eye = Math.exp(-(sx * sx + sy * sy));
+    const sx = (u - 0.62) * 11.5, sy = (v - 0.4) * 21;
+    // A compact spot with a sharp edge: only its own cells change per frame.
+    let eye = smoothstep(0.3, 0.75, Math.exp(-(sx * sx + sy * sy)));
+    if (NO_SPOT) eye = 0;
     pigment = mix3(pigment, [0.95, 0.32, 0.15], eye * 0.85);
     albedo = mix(albedo, 0.86 - 0.3 * Math.sin(Math.hypot(sx, sy) * 9), eye * 0.85);
   } else if (body.kind === 'saturn') {
@@ -315,6 +332,8 @@ function shadePlanet(body, n, spinAngle) {
   const pl = dot(pigment, LUMA);
   return scale(pigment, value / Math.max(0.4, pl));
 }
+
+let NO_SPOT = false;
 
 // Saturn's rings, in globe radii.
 const RING = { inner: 0.94 / 0.72, outer: 1.5 / 0.72 };
@@ -373,7 +392,7 @@ function renderBody(body, spinAngle) {
     if (ringHits > 0 && ringHits * 2 >= hits) isRing[r * cols + c] = true;
   }
   for (let i = 0; i < colors.length; i++) if (colors[i]) colors[i] = scale(colors[i], PLANET_EXPOSURE);
-  const cells = resolveGlyphs(colors, cols, rows, body.flat ? TINT[body.name] : null, body.levels ?? LEVELS, body.palette ?? null);
+  const cells = resolveGlyphs(colors, cols, rows, body.flat ? TINT[body.name] : null, body.levels ?? LEVELS, body.palette ?? null, body.sat ?? 1);
   const pick = (keep) => ({ cols, rows, cells: cells.map((cell, i) => (cell && keep(i) ? cell : null)) });
   return { globe: pick((i) => !isRing[i]), ring: pick((i) => isRing[i]) };
 }
@@ -578,6 +597,35 @@ function planetMarkup(body, idx) {
   let globe = `<rect x="-${H}" y="-${H}" width="${2 * H}" height="${2 * H}" fill="none"/>`;
   if (spin.n === 1) {
     globe += gridText(globes[0]);
+  } else if (body.kind === 'jupiter') {
+    // The bands are the same in every frame (they repeat once per frame), so
+    // draw them once without the spot, and per frame only the spot's cells,
+    // each run on a black backing that hides the band glyphs under it.
+    NO_SPOT = true;
+    const plain = renderBody(body, 0).globe;
+    NO_SPOT = false;
+    globe += gridText(plain);
+    const { cols, rows } = plain;
+    const same = (a, b) => (!a && !b) || (a && b && a.ch === b.ch && a.fill === b.fill);
+    globes.forEach((grid, i) => {
+      const diff = new Array(cols * rows).fill(null);
+      let rects = '';
+      for (let r = 0; r < rows; r++) {
+        let run = -1;
+        for (let c = 0; c <= cols; c++) {
+          const k = r * cols + c;
+          const differs = c < cols && !same(grid.cells[k], plain.cells[k]);
+          if (differs) { diff[k] = grid.cells[k]; if (run < 0) run = c; }
+          if (!differs && run >= 0) {
+            rects += `<rect x="${num((run - cols / 2) * CW)}" y="${num((r - rows / 2) * CH)}" width="${num((c - run) * CW)}" height="${num(CH)}" fill="#000"/>`;
+            run = -1;
+          }
+        }
+      }
+      const shift = -(((spin.n - i) % spin.n) * spin.period) / spin.n;
+      const flip = discrete('visibility', ['visible', 'hidden'], [0, 1 / spin.n], spin.period, shift);
+      globe += `<g visibility="${i ? 'hidden' : 'visible'}">${flip}${rects}${gridText({ cols, rows, cells: diff })}</g>`;
+    });
   } else {
     const { fixed, varying } = splitStatic(globes);
     globe += gridText(fixed);
@@ -593,7 +641,8 @@ function planetMarkup(body, idx) {
   // Rings carry their own light and stay outside the mask.
   const ring = gridText(renders[0].ring);
   const backing = `<circle r="${body.R + 0.5}" fill="#000"/>`;
-  const inner = `${backing}${globe}${shade}${ring}`;
+  const moons = (body.moons ?? []).map((m) => moonMarkup(body, m));
+  const inner = `${moons.map((m) => m.back).join('')}${backing}${globe}${shade}${ring}${moons.map((m) => m.front).join('')}`;
   // The start angle is a fixed rotation around the animated one, so the
   // planet rests at its own place when nothing animates.
   const planet = `<g transform="translate(${body.orbit} 0)"><g>${rotate(0, 360, T)}<g transform="rotate(${num(phi0)}) scale(1 ${num((1 / K) * 1000) / 1000})">${inner}</g></g></g>`;
@@ -627,7 +676,7 @@ function starField() {
   let seed = 0x5ea7;
   const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   const area = { x0: -260, y0: -900, x1: VIEW.w + 260, y1: VIEW.h + 900 };
-  const count = Math.round((area.x1 - area.x0) * (area.y1 - area.y0) * 1.1e-4);
+  const count = Math.round((area.x1 - area.x0) * (area.y1 - area.y0) * 0.75e-4);
   const groups = new Map();
   for (let i = 0; i < count; i++) {
     const x = area.x0 + rand() * (area.x1 - area.x0);
@@ -653,8 +702,8 @@ function twinkles() {
     const x = rand() * VIEW.w, y = rand() * VIEW.h;
     const dx = (x - CENTRE.x) / 820, dy = (y - CENTRE.y) / (820 * K);
     if (Math.hypot(dx, dy) < 0.6) { i--; continue; }
-    const T = 5 + rand() * 4;
-    out += `<text class="TW" x="${num(x)}" y="${num(y)}">${breathe(0.12, T, -rand() * T)}${rand() < 0.5 ? '+' : '*'}</text>`;
+    const T = 7 + rand() * 5;
+    out += `<text class="TW" x="${num(x)}" y="${num(y)}">${breathe(0.3, T, -rand() * T)}${rand() < 0.5 ? '+' : '*'}</text>`;
   }
   return out;
 }
@@ -662,36 +711,110 @@ function twinkles() {
 // ---------------------------------------------------------------- the Sun
 
 /**
- * The disc is static; granules in three noise-clumped layers breathe in and
- * out with smooth opacity cycles, and the corona's streamers do the same, so
- * the surface boils without ever switching frames.
+ * The disc is always fully drawn, so no cell ever goes dark. The boiling comes
+ * from three layers of granules drawn again in a brighter colour over it
+ * (same glyphs), each fading in and out on its own slow cycle.
  */
+function brighter(cell) {
+  // Same glyph, brighter colour: drawn over the base it reads as one cell glowing.
+  const ch = cell.ch;
+  const rgb = cell.fill.slice(1).split('').map((h) => parseInt(h, 16));
+  const lift = rgb.map((v) => Math.min(15, Math.round(v * 1.2 + 2)));
+  return { ch, fill: '#' + lift.map((v) => v.toString(16)).join('') };
+}
+
 function sunMarkup() {
-  const sun = renderSun();
-  const { cols, rows, cells, inDisc } = sun;
-  const layer = (i) => {
-    const r = Math.floor(i / cols), c = i % cols;
-    if (inDisc[i]) {
-      const n = [0, 1, 2].map((k) => valueNoise(c * 0.32 + k * 31.7, r * 0.64 + k * 17.3));
-      const best = n.indexOf(Math.max(...n));
-      return n[best] > 0.58 ? `g${best}` : 'disc';
-    }
-    const a = Math.atan2((r - rows / 2) * CH, (c - cols / 2) * CW);
-    return valueNoise(a * 5 + 3, 0.5) > 0.5 ? 'k0' : 'k1';
-  };
-  const parts = {};
+  const { cols, rows, cells, inDisc } = renderSun();
+  const base = new Array(cells.length).fill(null);
+  const glow = [0, 1, 2].map(() => new Array(cells.length).fill(null));
   for (let i = 0; i < cells.length; i++) {
-    if (!cells[i]) continue;
-    const key = layer(i);
-    parts[key] ??= new Array(cells.length).fill(null);
-    parts[key][i] = cells[i];
+    if (!cells[i] || !inDisc[i]) continue;
+    base[i] = cells[i];
+    const r = Math.floor(i / cols), c = i % cols;
+    for (let k = 0; k < 3; k++) {
+      const n = valueNoise(c * 0.27 + k * 31.7, r * 0.54 + k * 17.3);
+      if (n > 0.65) glow[k][i] = brighter(cells[i]);
+    }
   }
-  const grid = (key) => (parts[key] ? { cols, rows, cells: parts[key] } : null);
-  // Granules: three cycles of different length so the pattern never repeats visibly.
-  const g = (key) => (grid(key) ? gridText(grid(key)) : '');
-  const breathing = (key, T, begin) => (grid(key) ? `<g>${breathe(0.3, T, begin)}${g(key)}</g>` : '');
-  const disc = `<circle r="${SUN_R + 1}" fill="#000"/>${g('disc')}${breathing('g0', 10, -1.2)}${breathing('g1', 12.6, -3.9)}${breathing('g2', 15.4, -6.1)}`;
+  const text = (cellsOf) => gridText({ cols, rows, cells: cellsOf });
+  const fade = (k, T, begin) => {
+    const t = text(glow[k]);
+    return t ? `<g opacity="0"><animate attributeName="opacity" values="0;.95;0" keyTimes="0;.5;1" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" dur="${sec(T)}" begin="${sec(begin)}" repeatCount="indefinite"/>${t}</g>` : '';
+  };
+  const disc = `<circle r="${SUN_R + 1}" fill="#000"/>${text(base)}${fade(0, 13, -1.5)}${fade(1, 16.4, -6.2)}${fade(2, 20, -11.3)}`;
   return { corona: '', disc };
+}
+
+// ---------------------------------------------------------------- moons
+
+/** A moon on a tilted circle around its planet, in the planet's upright frame:
+ *  a back copy (hidden behind the globe by its black backing) and a front copy. */
+function moonMarkup(body, m) {
+  const r = m.r * body.R, k = m.k, T = m.period, th0 = m.start;
+  const content = m.name
+    ? gridText(renderBody({ name: m.name, flat: true, kind: 'rock', R: m.R }, 0).globe)
+    : `<text class="${classOf(m.dot)} MD">&#8226;</text>`;
+  const orbiting = `<g transform="scale(1 ${k})"><g transform="rotate(${th0})"><g>${rotate(0, 360, T)}<g transform="translate(${num(r)} 0)"><g transform="rotate(${-th0})"><g>${rotate(0, -360, T)}<g transform="scale(1 ${num(1 / k * 1000) / 1000})">${content}</g></g></g></g></g></g></g>`;
+  // In front of the globe while the angle is in (0, 180): lower on screen.
+  const from = (((0 - th0) / 360) % 1 + 1) % 1, to = (((180 - th0) / 360) % 1 + 1) % 1;
+  const f = windowAnimate('opacity', from, to, 1, 0, T);
+  const b = windowAnimate('opacity', from, to, 0, 1, T);
+  return { back: `<g opacity="${b.rest}">${b.el}${orbiting}</g>`, front: `<g opacity="${f.rest}">${f.el}${orbiting}</g>` };
+}
+
+// ---------------------------------------------------------------- comet
+
+/** A comet on a Kepler ellipse, inclined to the planets' plane: slow far out,
+ *  fast at perihelion. Its tail always points away from the Sun and grows as
+ *  it comes in. */
+function cometMarkup() {
+  const T = 170, a = 560, e = 0.8, w = 205 * DEG, inc = 18 * DEG, N = 90;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const M = (2 * Math.PI * i) / N;
+    let E = M;
+    for (let it = 0; it < 40; it++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    const xo = a * (Math.cos(E) - e), zo = a * Math.sqrt(1 - e * e) * Math.sin(E);
+    const P = rotX([xo * Math.cos(w) - zo * Math.sin(w), 0, xo * Math.sin(w) + zo * Math.cos(w)], inc);
+    pts.push({ x: dot(P, RIGHT), y: -dot(P, UP), r: len(P) });
+  }
+  const ang = pts.map((p) => Math.atan2(p.y, p.x) / DEG);
+  for (let i = 1; i < ang.length; i++) {
+    while (ang[i] - ang[i - 1] > 180) ang[i] -= 360;
+    while (ang[i] - ang[i - 1] < -180) ang[i] += 360;
+  }
+  const L = pts.map((p) => clamp(230 / p.r, 0.35, 2.4));
+  const times = pts.map((_, i) => Math.round((i / N) * 1e5) / 1e5).join(';');
+  const anim = (type, values) => `<animateTransform attributeName="transform" type="${type}" values="${values.join(';')}" keyTimes="${times}" dur="${sec(T)}" begin="${sec(-T * 0.9)}" repeatCount="indefinite"/>`;
+  const c = (fill) => classOf(fill);
+  const tail =
+    `<text class="CT"><tspan x="4" y="0" class="${c('#eff')}">#</tspan><tspan class="${c('#bdf')}">&amp;*+</tspan><tspan class="${c('#8ad')}">=~-</tspan><tspan class="${c('#58a')}">-:.</tspan><tspan class="${c('#357')}"> . .  .</tspan>` +
+    `<tspan x="7" y="-3.4" class="${c('#7ac')}">*+=~</tspan><tspan class="${c('#468')}">-:. .</tspan>` +
+    `<tspan x="7" y="3.4" class="${c('#7ac')}">+=~-</tspan><tspan class="${c('#468')}">:.  .</tspan></text>`;
+  const head = `<text class="CH ${c('#fff')}">@</text>`;
+  return `<g transform="translate(${num(pts[0].x)} ${num(pts[0].y)})">${anim('translate', pts.map((p) => `${num(p.x)} ${num(p.y)}`))}` +
+    `<g transform="rotate(${num(ang[0])})">${anim('rotate', ang.map(num))}` +
+    `<g transform="scale(${num(L[0])} 1)">${anim('scale', L.map((l) => `${num(l)} 1`))}${tail}</g>${head}</g></g>`;
+}
+
+// ---------------------------------------------------------------- shooting stars
+
+function meteorsMarkup() {
+  const list = [
+    { x: 230, y: 80, dx: 230, dy: 75, T: 23, at: 0.3 },
+    { x: 1200, y: 110, dx: -210, dy: 85, T: 31, at: 0.62 },
+    { x: 1380, y: 690, dx: -170, dy: 55, T: 43, at: 0.12 },
+    { x: 140, y: 760, dx: 190, dy: -50, T: 53, at: 0.45 },
+  ];
+  return list.map((m, i) => {
+    const id = `mt${i}`;
+    shades.push(`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${num(-m.dx * 0.5)}" y2="${num(-m.dy * 0.5)}"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#9cf" stop-opacity="0"/></linearGradient>`);
+    const k = (x) => Math.round(x * 1e4) / 1e4;
+    const kt = `0;${k(m.at)};${k(m.at + 0.004)};${k(m.at + 0.022)};${k(m.at + 0.03)};1`;
+    return `<g opacity="0"><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="${kt}" dur="${sec(m.T)}" repeatCount="indefinite"/>` +
+      `<g transform="translate(${m.x} ${m.y})"><animateTransform attributeName="transform" type="translate" values="${m.x} ${m.y};${m.x} ${m.y};${m.x + m.dx} ${m.y + m.dy};${m.x + m.dx} ${m.y + m.dy}" keyTimes="0;${k(m.at)};${k(m.at + 0.03)};1" dur="${sec(m.T)}" repeatCount="indefinite"/>` +
+      `<line x2="${num(-m.dx * 0.5)}" y2="${num(-m.dy * 0.5)}" stroke="url(#${id})" stroke-width="1.3" stroke-linecap="round"/></g></g>`;
+  }).join('');
 }
 
 // ---------------------------------------------------------------- build
@@ -720,9 +843,12 @@ for (const p of [...planets].reverse()) {
   }
 }
 
+const meteors = meteorsMarkup();
+const comet = cometMarkup();
+report.push(`comet: ${comet.length}  meteors: ${meteors.length}`);
 const fillCss = [...classes].map(([fill, cls]) => `.${cls}{fill:${fill}}`).join('');
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEW.w} ${VIEW.h}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>svg{background:#000}text{font-family:Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace;font-size:${FONT}px;white-space:pre;dominant-baseline:central}${fillCss}.ORB{fill:none;stroke:#fff;stroke-opacity:.17;stroke-width:1.3;stroke-linecap:round;stroke-dasharray:0 7}.BELT path{stroke:#bfb6a6;stroke-opacity:.45;stroke-width:2.4;stroke-linecap:round}.TW{font-size:10px;fill:#ccd6ff}${css.join('')}</style><defs>${shades.join('')}</defs><rect x="-1200" y="-1600" width="4000" height="4000" fill="#000"/>${starField()}${twinkles()}<g><g transform="translate(${CENTRE.x} ${CENTRE.y})"><rect x="-1000" y="-700" width="2000" height="1400" fill="none"/><g class="ORB">${orbitMarkup}</g>${beltMarkup()}${sun.corona}<g transform="scale(1 ${K})">${back.join('')}</g>${sun.disc}<g transform="scale(1 ${K})">${front.join('')}</g></g></g></svg>`;
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEW.w} ${VIEW.h}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><style>svg{background:#000}text{font-family:Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace;font-size:${FONT}px;white-space:pre;dominant-baseline:central}${fillCss}.ORB{fill:none;stroke:#fff;stroke-opacity:.17;stroke-width:1.3;stroke-linecap:round;stroke-dasharray:0 7}.BELT path{stroke:#bfb6a6;stroke-opacity:.45;stroke-width:2.4;stroke-linecap:round}.TW{font-size:10px;fill:#ccd6ff}.MD{font-size:9px;text-anchor:middle;dominant-baseline:central}.CT{font-size:6.5px}.CH{font-size:10px;text-anchor:middle;dominant-baseline:central}${css.join('')}</style><defs>${shades.join('')}</defs><rect x="-1200" y="-1600" width="4000" height="4000" fill="#000"/>${starField()}${twinkles()}${meteors}<g><g transform="translate(${CENTRE.x} ${CENTRE.y})"><rect x="-1000" y="-700" width="2000" height="1400" fill="none"/><g class="ORB">${orbitMarkup}</g>${beltMarkup()}${sun.corona}<g transform="scale(1 ${K})">${back.join('')}</g>${sun.disc}<g transform="scale(1 ${K})">${front.join('')}</g>${comet}</g></g></svg>`;
 
 for (const bad of [/href=/, /<use\b/, /<a[\s>]/, /\sstyle=/, /@media\s*\((?!prefers-)/, /mask-image/, /vector-effect/]) {
   if (bad.test(svg)) throw new Error(`scene holds markup the app drops: ${bad}`);
