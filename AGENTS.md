@@ -109,8 +109,16 @@ with the tsconfig from the types header (`jsxFactory: h`).
     inclined 18 deg, 170 s) whose tail always points away from the Sun and
     lengthens near perihelion (nested translate, rotate, scale animations);
     four shooting stars on 23-53 s cycles.
-  - Scene ~126k of 131,072 characters: little room left. Earth (12 frames,
+  - Scene ~125k of 131,072 characters: little room left. Earth (12 frames,
     ~34k) and the Sun (~15k) are the largest parts.
+- v1.1.0: Claude Code's mascot in a space helmet floats across as pixel art
+  (owner's request, from a reference image): `ASTRONAUT` grid in the
+  generator, two passes per 180 s cycle (left to right high at 9-40 s, then
+  right to left low at 99-130 s, flipped to face its way), bob, sway and a
+  two-frame leg paddle. It rests hidden (opacity 0), so with motion off it
+  never shows. Drawn by the scene itself; no artwork file is copied. Checked
+  as rendered from the scene; its flight not yet seen in the app (the window
+  was not in front during the capture).
 - Verified in the app by screen capture: everything moves; Saturn and its
   rings render cleanly at full resolution.
 - Tried and rejected: two stacked Svg leaves in the Backdrop tree (to double
@@ -151,6 +159,8 @@ with the tsconfig from the types header (`jsxFactory: h`).
 - Do not use the real Kepler ratios (outer planets would look frozen).
 - Do not fade parts of the Sun toward dark: the owner hated cells "switching off".
 - Do not stack two Svg leaves in the backdrop: it freezes them.
+- Screen captures for checks only while the Claude window is in front; delete
+  any capture that shows another app, unread.
 - Do not add a glow or halo around the Sun (owner rejected it).
 - Do not make planets dim or their dark side invisible (owner rejected it).
 - Do not lighten panels or menus above #000000 unless the owner asks.
